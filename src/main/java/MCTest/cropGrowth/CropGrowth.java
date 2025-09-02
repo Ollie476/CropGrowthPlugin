@@ -53,7 +53,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
     }
 
     @EventHandler
-    public void OnChunkLoad(ChunkLoadEvent event) throws IOException {
+    public void onChunkLoad(ChunkLoadEvent event) throws IOException {
         Chunk chunk = event.getChunk();
 
         growCropsInChunk(chunk);
@@ -85,14 +85,14 @@ public final class CropGrowth extends JavaPlugin implements Listener {
     }
 
     @EventHandler
-    public void BlockGrowEvent(BlockGrowEvent event) {
+    public void blockGrowEvent(BlockGrowEvent event) {
         if (event.getBlock().getType() == Material.TURTLE_EGG)
             return;
         event.setCancelled(true);
     }
 
     @EventHandler
-    public void OnBlockPlaced(BlockPlaceEvent event) {
+    public void onBlockPlaced(BlockPlaceEvent event) {
         Block block = event.getBlock();
         if (block.getBlockData() instanceof Ageable) {
             if (block.getType() == Material.TURTLE_EGG)
