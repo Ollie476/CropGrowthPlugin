@@ -1,0 +1,4 @@
+name: CropGrowth
+version: '1.0'
+main: MCTest.cropGrowth.CropGrowth
+api-version: '1.21'
