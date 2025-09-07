@@ -8,6 +8,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
+import java.util.Map;
 
 public class CropCommands implements CommandExecutor {
     @Override
@@ -15,11 +16,16 @@ public class CropCommands implements CommandExecutor {
         if (commandSender instanceof Player && strings.length > 0) {
             Player commandPlayer = (Player) commandSender;
 
-            if (strings[0].equals("tick")) {
-                changeCrop(commandPlayer, strings[1], strings[2], strings[3]);
-            }
-            else if (strings[0].equals("reset")) {
-                resetAll(commandPlayer);
+            switch (strings[0]) {
+                case "tick":
+                    changeCrop(commandPlayer, strings[1], strings[2], strings[3]);
+                    break;
+                case "reset":
+                    resetAll(commandPlayer);
+                    break;
+                case "list":
+                    viewChanged(commandPlayer);
+                    break;
             }
         }
         return true;
@@ -45,4 +51,31 @@ public class CropCommands implements CommandExecutor {
 
         sender.sendMessage(ChatColor.GREEN + "All biome tick speeds have reset to 20");
     }
+
+    private void viewChanged(Player sender) {
+        for (Material crop : CropGrowth.tickMap.keySet()) {
+            HashMap<Biome, Integer> biomeMap = CropGrowth.tickMap.get(crop);
+            if (biomeMap == null || biomeMap.isEmpty()) continue;
+
+            boolean hasChanges = false;
+            StringBuilder output = new StringBuilder(ChatColor.GREEN + crop.name() + ":\n");
+
+            for (Map.Entry<Biome, Integer> entry : biomeMap.entrySet()) {
+                if (entry.getValue() != 20) {
+                    hasChanges = true;
+                    output.append(ChatColor.GOLD)
+                            .append("  ")
+                            .append(entry.getKey().name())
+                            .append(" → ")
+                            .append(entry.getValue())
+                            .append("\n");
+                }
+            }
+
+            if (hasChanges) {
+                sender.sendMessage(output.toString().trim());
+            }
+        }
+    }
+
 }

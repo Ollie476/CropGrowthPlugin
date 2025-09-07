@@ -112,7 +112,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
             public List<String> onTabComplete(CommandSender commandSender, Command command, String s, String[] strings) {
                 switch (strings.length) {
                     case 1:
-                        String[] options = new String[] {"tick", "reset"};
+                        String[] options = new String[] {"tick", "reset", "list"};
                         List<String> filtered = new ArrayList<>();
 
                         for (String option : options) {
