@@ -31,7 +31,7 @@ class CropData {
 }
 
 public final class CropGrowth extends JavaPlugin implements Listener {
-    private File file;
+    static private File file;
 
     @Override
     public void onEnable() {
@@ -41,10 +41,10 @@ public final class CropGrowth extends JavaPlugin implements Listener {
             pluginFolder.mkdirs();
 
 
-        this.file = new File(pluginFolder, "cropData.yml");
-        if (!this.file.exists()) {
+        file = new File(pluginFolder, "cropData.yml");
+        if (!file.exists()) {
             try {
-                this.file.createNewFile();
+                file.createNewFile();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -63,19 +63,21 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         long tickSpeed = 20;
 
         new BukkitRunnable() {
-            List<CropData> cropDatalist = new ArrayList<>();
+            private HashSet<CropData> cropDataList;
 
             @Override
             public void run() {
+                this.cropDataList = loadAllFromYml();
+                for (CropData crop : cropDataList) {
+                    incrementCropAge(crop.block);
+                }
 
             }
         }.runTaskTimer(this, 0L, tickSpeed);
     }
 
-    private void setCropAge(Block block) {
-        if (block.getBlockData() instanceof Ageable) {
-            Ageable ageable = (Ageable) block.getBlockData();
-
+    private void incrementCropAge(Block block) {
+        if (block.getBlockData() instanceof Ageable ageable) {
             int age = ageable.getAge();
             if (age > 6 || age < 0) return;
 
@@ -102,21 +104,21 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         }
     }
 
-    private void saveToYml(CropData cropData) {
+    static private void saveToYml(CropData cropData) {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
         Block block = cropData.block;
         String key = block.getX() + "," + block.getY() + "," + block.getZ();
         config.set(key, cropData.biome.toString());
 
         try {
-            config.save(this.file);
+            config.save(file);
         }
         catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private HashSet<CropData> loadAllFromYml() {
+    static private HashSet<CropData> loadAllFromYml() {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
         HashSet<CropData> cropDataList = new HashSet<CropData>();
 
