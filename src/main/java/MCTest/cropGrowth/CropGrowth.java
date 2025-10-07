@@ -5,7 +5,6 @@ import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
-import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.type.Farmland;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -16,6 +15,7 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.*;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -49,6 +49,8 @@ class CropData {
 public final class CropGrowth extends JavaPlugin implements Listener {
     static private File placedFile;
     static private File tickFile;
+
+    public final Plugin plugin = this;
 
     static HashMap<Material, HashMap<Biome, Integer>> tickMap;
     Set<CropData> allCrops;
@@ -99,6 +101,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
             }
         }
 
+        commandSetup();
         commandSetup();
 
         tickMap = loadFromTickFile();
@@ -177,7 +180,8 @@ public final class CropGrowth extends JavaPlugin implements Listener {
                     double moistureBuff = 0.5;
 
                     if (below.getBlockData() instanceof Farmland farmland) {
-                        moistureBuff = (farmland.getMoisture() == 7) ? 2.0 : 0.5;
+                        int moisture = farmland.getMoisture();
+                        moistureBuff = 0.5 + (1.5 * (moisture / 7.0));
                     }
 
                     double biomeTickSpeed = tickSpeed * moistureBuff;
@@ -186,20 +190,22 @@ public final class CropGrowth extends JavaPlugin implements Listener {
                     double chance;
 
                     if (cropType == Material.SUGAR_CANE) {
-                        chance = biomeTickSpeed / 16393;
+                        chance = biomeTickSpeed / 410;
                     }
                     else {
-                        chance = biomeTickSpeed / 5000;
+                        chance = biomeTickSpeed / 125;
                     }
 
                     chance = Math.clamp(chance, 0.0, 1.0);
                     if (Math.random() < chance) {
-                        incrementCropAge(block);
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                            incrementCropAge(block);
+                        }, 1L);
                     }
                 }
             }
         };
-        task.runTaskTimer(this, 0L, 5L);
+        task.runTaskTimerAsynchronously(this, 0L, 400L);
         chunkTasks.put(key, task);
     }
 
@@ -295,7 +301,12 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         if (block.getBlockData() instanceof Ageable ageable && ageable.getAge() != ageable.getMaximumAge()) {
             block.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, block.getLocation().add(0.5, 0.4, 0.5), 10, 0.3, 0.15, 0.3, 0);
             block.getWorld().playSound(block.getLocation(), Sound.ITEM_BONE_MEAL_USE, 1.0f, 1.0f);
-            incrementCropAge(block);
+            if (e.getPlayer().getGameMode() != GameMode.CREATIVE)
+                item.setAmount(item.getAmount() - 1);
+
+            Random rnd = new Random();
+            for (int i = 0; i < rnd.nextInt(2,5); i++)
+                incrementCropAge(block);
         }
     }
 
