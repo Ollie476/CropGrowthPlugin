@@ -13,7 +13,7 @@ import java.util.Map;
 public class CropCommands implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender commandSender, Command command, String s, String[] strings) {
-        if (commandSender instanceof Player && strings.length > 0) {
+        if (commandSender instanceof Player && strings.length > 0 && commandSender.isOp()) {
             Player commandPlayer = (Player) commandSender;
 
             switch (strings[0]) {
@@ -33,19 +33,19 @@ public class CropCommands implements CommandExecutor {
 
     private void changeCrop(Player sender, String cropName, String biomeName, String tickSpeed) {
         try {
-            CropGrowth.saveToTickFile(Material.valueOf(cropName), Biome.valueOf(biomeName), Integer.parseInt(tickSpeed));
-            sender.sendMessage(ChatColor.GREEN + biomeName + " is now running at a tick speed of: " + tickSpeed);
+            CropGrowth.saveToTickFile(Material.valueOf(cropName), Biome.valueOf(biomeName), Integer.valueOf(Integer.parseInt(tickSpeed)));
+            sender.sendMessage(ChatColor.GREEN + cropName + " in " + biomeName + " is now running at a tick speed of: " + tickSpeed + " (default: 20)");
         } catch (Exception e) {
             sender.sendMessage(ChatColor.RED + "Didn't work");
         }
     }
 
     private void resetAll(Player sender) {
-        for (Material crop : CropGrowth.ageableCrops)
-            for (Biome biome: Biome.values()) {
+        for (Material crop : CropGrowth.cropSet)
+            for (Biome biome : Biome.values()) {
                 HashMap<Biome, Integer> biomeMap = CropGrowth.tickMap.get(crop);
                 if (biomeMap == null || !biomeMap.containsKey(biome)) {
-                    CropGrowth.saveToTickFile(crop, biome, 20);
+                    CropGrowth.saveToTickFile(crop, biome, (Integer)20);
                 }
             }
 

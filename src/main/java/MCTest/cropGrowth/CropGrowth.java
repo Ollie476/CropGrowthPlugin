@@ -3,14 +3,19 @@ package MCTest.cropGrowth;
 import org.bukkit.*;
 import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.Directional;
+import org.bukkit.block.data.type.Farmland;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.*;
 import org.bukkit.event.block.*;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -48,14 +53,18 @@ public final class CropGrowth extends JavaPlugin implements Listener {
     static HashMap<Material, HashMap<Biome, Integer>> tickMap;
     Set<CropData> allCrops;
 
-    static Set<Material> ageableCrops = Set.of(
+    static Set<Material> cropSet = Set.of(
             Material.WHEAT,
             Material.CARROTS,
             Material.POTATOES,
             Material.BEETROOTS,
             Material.NETHER_WART,
             Material.COCOA,
-            Material.SWEET_BERRY_BUSH
+            Material.SWEET_BERRY_BUSH,
+            Material.SUGAR_CANE,
+            Material.PUMPKIN_STEM,
+            Material.MELON_STEM,
+            Material.CACTUS
     );
 
     private final Map<String, BukkitRunnable> chunkTasks = new HashMap<>();
@@ -94,7 +103,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
 
         tickMap = loadFromTickFile();
 
-        for (Material crop : ageableCrops)
+        for (Material crop : cropSet)
             for (Biome biome: Biome.values()) {
                 HashMap<Biome, Integer> biomeMap = tickMap.get(crop);
                 if (biomeMap == null || !biomeMap.containsKey(biome)) {
@@ -122,13 +131,17 @@ public final class CropGrowth extends JavaPlugin implements Listener {
                         }
                         return filtered;
                     case 2:
+                        if(strings[0].equals("reset"))
+                            break;
                         List<String> cropNames = new ArrayList<>();
-                        for (Material crop : ageableCrops)
+                        for (Material crop : cropSet)
                             if (crop.toString().toLowerCase().startsWith(strings[1].toLowerCase()))
                                 cropNames.add(crop.name());
 
                         return cropNames;
                     case 3:
+                        if(strings[0].equals("reset "))
+                            break;
                         List<String> biomeNames = new ArrayList<>();
                         for (Biome biome : Biome.values())
                             if (biome.toString().toLowerCase().startsWith(strings[2].toLowerCase()))
@@ -158,25 +171,35 @@ public final class CropGrowth extends JavaPlugin implements Listener {
                     HashMap<Biome, Integer> biomeMap = tickMap.get(cropType);
                     if (biomeMap == null) continue;
 
-                    Integer tickSpeed = biomeMap.get(biome);
-                    if (tickSpeed == null) continue;
+                    int tickSpeed = biomeMap.get(biome);
 
                     Block below = block.getRelative(0, -1, 0);
                     double moistureBuff = 0.5;
-                    if (below.getBlockData() instanceof org.bukkit.block.data.type.Farmland farmland) {
+
+                    if (below.getBlockData() instanceof Farmland farmland) {
                         moistureBuff = (farmland.getMoisture() == 7) ? 2.0 : 0.5;
                     }
 
                     double biomeTickSpeed = tickSpeed * moistureBuff;
                     if (biomeTickSpeed < 1) continue;
 
-                    if (Math.random() < 1 / (500.0 / biomeTickSpeed)) {
+                    double chance;
+
+                    if (cropType == Material.SUGAR_CANE) {
+                        chance = biomeTickSpeed / 16393;
+                    }
+                    else {
+                        chance = biomeTickSpeed / 5000;
+                    }
+
+                    chance = Math.clamp(chance, 0.0, 1.0);
+                    if (Math.random() < chance) {
                         incrementCropAge(block);
                     }
                 }
             }
         };
-        task.runTaskTimer(this, 0L, 20L);
+        task.runTaskTimer(this, 0L, 5L);
         chunkTasks.put(key, task);
     }
 
@@ -185,12 +208,38 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         return chunk.getWorld().getName() + "," + chunk.getX() + "," + chunk.getZ();
     }
 
+    private boolean growVerticalCrops(Block block, int maxHeight) {
+        if (block.getType() == Material.SUGAR_CANE || block.getType() == Material.CACTUS) {
+            Material material = block.getType();
+            Block aboveBlock = block.getRelative(BlockFace.UP, 1);
+            if (aboveBlock.getType() != Material.AIR) return true;
+
+            int height = 1;
+            Block below = block.getRelative(BlockFace.DOWN, 1);
+            while (below.getType() == material && height < maxHeight) {
+                height++;
+                below = below.getRelative(BlockFace.DOWN, 1);
+            }
+
+            if (height >= maxHeight) {
+                removeFromPlacedFile(block);
+                return true;
+            }
+
+            aboveBlock.setType(material);
+            saveToPlacedFile(new CropData("world", aboveBlock.getX(), aboveBlock.getY(), aboveBlock.getZ(), aboveBlock.getBiome()));
+            return true;
+        }
+        return false;
+    }
+
     private void incrementCropAge(Block block) {
         if (block.getLightLevel() < 9)
             return;
 
-
-        if (block.getBlockData() instanceof Ageable ageable) {
+        if (growVerticalCrops(block, 3))
+            return;
+        else if (block.getBlockData() instanceof Ageable ageable){
             int age = ageable.getAge();
             if (age < ageable.getMaximumAge()) {
                 ageable.setAge(age + 1);
@@ -199,17 +248,18 @@ public final class CropGrowth extends JavaPlugin implements Listener {
                 removeFromPlacedFile(block);
             }
         }
+
     }
 
     @EventHandler
-    public void onBlockBreak(BlockBreakEvent event) {
-        removeFromPlacedFile(event.getBlock());
+    public void onBlockBreak(BlockBreakEvent e) {
+        removeFromPlacedFile(e.getBlock());
     }
 
     @EventHandler
-    public void onBlockPlace(BlockPlaceEvent event) {
-        Block block = event.getBlock();
-        if (block.getBlockData() instanceof Ageable && block.getType() != Material.TURTLE_EGG) {
+    public void onBlockPlace(BlockPlaceEvent e) {
+        Block block = e.getBlock();
+        if (cropSet.contains(block.getType())) {
             saveToPlacedFile(new CropData(
                     block.getWorld().getName(),
                     block.getX(), block.getY(), block.getZ(),
@@ -219,20 +269,44 @@ public final class CropGrowth extends JavaPlugin implements Listener {
     }
 
     @EventHandler
-    public void onBlockGrow(BlockGrowEvent event) {
-        if (event.getBlock().getType() != Material.TURTLE_EGG) {
-            event.setCancelled(true);
+    public void onBlockGrow(BlockGrowEvent e) {
+        Material type = e.getBlock().getType();
+
+        if (cropSet.contains(type))
+            e.setCancelled(true);
+    }
+
+
+    @EventHandler
+    public void onPlayerInteract(PlayerInteractEvent e) {
+        if (e.getAction() != Action.RIGHT_CLICK_BLOCK)
+            return;
+
+        ItemStack item = e.getItem();
+        if (item == null || item.getType() != Material.BONE_MEAL) {
+            return;
+        }
+
+        Block block = e.getClickedBlock();
+        if (block == null || !cropSet.contains(block.getType()))
+            return;
+
+        e.setCancelled(true);
+        if (block.getBlockData() instanceof Ageable ageable && ageable.getAge() != ageable.getMaximumAge()) {
+            block.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, block.getLocation().add(0.5, 0.4, 0.5), 10, 0.3, 0.15, 0.3, 0);
+            block.getWorld().playSound(block.getLocation(), Sound.ITEM_BONE_MEAL_USE, 1.0f, 1.0f);
+            incrementCropAge(block);
         }
     }
 
     @EventHandler
-    public void onChunkLoad(ChunkLoadEvent event) {
-        startChunkTask(event.getChunk());
+    public void onChunkLoad(ChunkLoadEvent e) {
+        startChunkTask(e.getChunk());
     }
 
     @EventHandler
-    public void onChunkUnload(ChunkUnloadEvent event) {
-        String key = getChunkKey(event.getChunk());
+    public void onChunkUnload(ChunkUnloadEvent e) {
+        String key = getChunkKey(e.getChunk());
         BukkitRunnable task = chunkTasks.remove(key);
         if (task != null) task.cancel();
     }
@@ -243,7 +317,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         try {
             config.save(placedFile);
         } catch (IOException e) {
-            e.printStackTrace();
+
         }
         allCrops = loadFromPlacedFile();
     }
@@ -255,7 +329,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         try {
             config.save(placedFile);
         } catch (IOException e) {
-            e.printStackTrace();
+
         }
         allCrops = loadFromPlacedFile();
     }
@@ -280,13 +354,13 @@ public final class CropGrowth extends JavaPlugin implements Listener {
         return cropDataList;
     }
 
-    static public void saveToTickFile(Material crop, Biome biome, int tickSpeed) {
+    static public void saveToTickFile(Material crop, Biome biome, Integer tickSpeed) {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(tickFile);
         config.set(crop.toString() + "," + biome.toString(), tickSpeed);
         try {
             config.save(tickFile);
         } catch (IOException e) {
-            e.printStackTrace();
+
         }
 
         tickMap = loadFromTickFile();
@@ -319,7 +393,7 @@ public final class CropGrowth extends JavaPlugin implements Listener {
 
             int tickSpeed;
             try {
-                tickSpeed = Integer.parseInt(config.getString(key));
+                tickSpeed = config.getInt(key);
             } catch (NumberFormatException e) {
                 Bukkit.getLogger().warning("[CropGrowth] Invalid tick speed for " + key);
                 continue;
